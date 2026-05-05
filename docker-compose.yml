@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: bescom_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - CORS_ORIGINS=http://localhost:3000
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    image: node:20-alpine
+    container_name: bescom_frontend
+    working_dir: /app
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_PROXY_TARGET=http://backend:8000
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev"
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: bescom_redis
+    ports:
+      - "6379:6379"
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: bescom_timescaledb
+    environment:
+      POSTGRES_DB: bescom_meters
+      POSTGRES_USER: bescom
+      POSTGRES_PASSWORD: change_me_in_production
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01_init.sql
+
+volumes:
+  timescale_data:
