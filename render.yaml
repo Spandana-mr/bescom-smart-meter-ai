@@ -10,15 +10,14 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
 
-  - type: web
-    name: bescom-smart-meter-dashboard
-    runtime: static
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          type: web
-          name: bescom-smart-meter-api
-          property: host
+  - type: static
+  name: bescom-smart-meter-dashboard
+  rootDir: frontend
+  buildCommand: npm install && npm run build
+  staticPublishPath: dist
+  envVars:
+    - key: VITE_API_URL
+      fromService:
+        type: web
+        name: bescom-smart-meter-api
+        property: host
