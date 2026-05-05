@@ -10,12 +10,14 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
 
-  - type: static
+ - type: static
   name: bescom-smart-meter-dashboard
   rootDir: frontend
   buildCommand: npm install && npm run build
   staticPublishPath: dist
   envVars:
+    - key: NODE_VERSION
+      value: 18
     - key: VITE_API_URL
       fromService:
         type: web
