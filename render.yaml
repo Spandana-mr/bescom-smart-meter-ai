@@ -13,7 +13,7 @@ services:
  - type: static
   name: bescom-smart-meter-dashboard
   rootDir: frontend
-  buildCommand: npm install && npm run build
+  buildCommand: npm install --include=dev && npm run build
   staticPublishPath: dist
   envVars:
     - key: NODE_VERSION
