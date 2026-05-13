@@ -32,28 +32,73 @@ smart_ai_meter/
 cd C:\Users\Spandana\Documents\Codex\2026-05-05\files-mentioned-by-the-user-smart\smart_ai_meter
 ```
 
-2. Start the backend:
+2. Start the backend in VS Code terminal 1:
 
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-3. In a second terminal, start the frontend:
+3. In VS Code terminal 2, start the frontend:
 
 ```bash
 cd C:\Users\Spandana\Documents\Codex\2026-05-05\files-mentioned-by-the-user-smart\smart_ai_meter\frontend
 npm install
+$env:VITE_API_URL="http://127.0.0.1:8000"
 npm run dev
 ```
 
 4. Open:
 
-- Dashboard: `http://localhost:3000`
-- API docs: `http://localhost:8000/docs`
+- Dashboard: `http://127.0.0.1:3000`
+- API docs: `http://127.0.0.1:8000/docs`
+
+## Run With The Reviewer Demo Dataset
+
+The backend supports a dataset override through `BESCOM_DATA_DIR`.
+
+In backend terminal 1:
+
+```powershell
+cd C:\Users\Spandana\Documents\Codex\2026-05-05\files-mentioned-by-the-user-smart\smart_ai_meter\backend
+.venv\Scripts\Activate.ps1
+$env:BESCOM_DATA_DIR="C:\Users\Spandana\Documents\Codex\2026-05-05\files-mentioned-by-the-user-smart\smart_ai_meter\data\demo_edge_cases"
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+The frontend command stays the same. Restart the backend whenever you change `BESCOM_DATA_DIR`.
+
+## Train The Runnable Synthetic ML Backend
+
+The repo keeps the heavier research model scaffolds under `ml/`, and also ships a locally runnable synthetic-data training path that works with the current demo dataset:
+
+- Quantile gradient-boosting forecaster with simple conformal-style interval padding
+- Daily anomaly ensemble using supervised random forest + unsupervised isolation forest
+- Persisted artifacts consumed by the FastAPI backend
+
+Run from the project root:
+
+```powershell
+python scripts\train_synthetic_models.py
+```
+
+This writes artifacts under:
+
+```text
+backend/artifacts/synthetic_ml/
+```
+
+Useful backend endpoints after training:
+
+- `GET /api/v1/ml/status`
+- `GET /api/v1/ml/forecast-preview`
+- `GET /api/v1/ml/anomaly-rankings`
+- `GET /api/v1/ml/meters/{meter_id}/anomaly-scores`
+
+The existing frontend is not changed by this training workflow, but the Models page reads refreshed backend model-health data after artifacts are available.
 
 ## Run Locally With Docker
 

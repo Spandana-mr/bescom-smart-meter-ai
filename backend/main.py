@@ -1,22 +1,37 @@
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.services.mock_data import (
     alerts,
+    alert_detail,
     audit_events,
     data_quality,
+    data_quality_trend,
     detector_health,
+    drift_history,
     feeder_balance,
     forecast_points,
     kpis,
+    meter_list,
+    meter_profile,
     model_health,
     pipeline_layers,
+    revenue_trend,
     scenario_points,
+    topology_graph,
     topology_nodes,
+    update_alert_status,
+    zone_map,
     zones,
+)
+from app.services.ml_runtime import (
+    anomaly_rankings,
+    anomaly_scores_for_meter,
+    forecast_preview,
+    runtime_status,
 )
 
 app = FastAPI(
@@ -88,15 +103,42 @@ async def list_alerts(
 
 @app.get("/api/v1/alerts/{alert_id}")
 async def get_alert(alert_id: str):
-    for item in alerts():
-        if item["id"] == alert_id:
-            return item
+    item = alert_detail(alert_id)
+    if item:
+        return item
     raise HTTPException(status_code=404, detail="Alert not found")
+
+
+@app.post("/api/v1/alerts/{alert_id}/feedback")
+async def submit_alert_feedback(alert_id: str, payload: dict = Body(...)):
+    item = alert_detail(alert_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {
+        "saved": True,
+        "feedbackId": f"FBK-UI-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
+        "alertId": alert_id,
+        "payload": payload,
+        "message": "Feedback captured for the next model retraining batch.",
+    }
+
+
+@app.post("/api/v1/alerts/{alert_id}/action")
+async def update_alert_action(alert_id: str, payload: dict = Body(...)):
+    item = update_alert_status(alert_id, str(payload.get("action", "")).lower())
+    if not item:
+        raise HTTPException(status_code=404, detail="Alert action not available")
+    return {"saved": True, "item": item}
 
 
 @app.get("/api/v1/zones")
 async def list_zones():
     return zones()
+
+
+@app.get("/api/v1/zones/map")
+async def get_zone_map():
+    return zone_map()
 
 
 @app.get("/api/v1/forecast")
@@ -130,14 +172,49 @@ async def get_topology():
     return topology_nodes()
 
 
+@app.get("/api/v1/feeders/graph")
+async def get_topology_graph():
+    return topology_graph()
+
+
 @app.get("/api/v1/models/health")
 async def get_model_health():
     return model_health()
 
 
+@app.get("/api/v1/ml/status")
+async def get_ml_runtime_status():
+    return runtime_status()
+
+
+@app.get("/api/v1/ml/forecast-preview")
+async def get_ml_forecast_preview(limit: int = 48):
+    return {"items": forecast_preview(limit)}
+
+
+@app.get("/api/v1/ml/anomaly-rankings")
+async def get_ml_anomaly_rankings(limit: int = 50):
+    return {"items": anomaly_rankings(limit)}
+
+
+@app.get("/api/v1/ml/meters/{meter_id}/anomaly-scores")
+async def get_ml_meter_anomaly_scores(meter_id: str):
+    return {"items": anomaly_scores_for_meter(meter_id)}
+
+
+@app.get("/api/v1/models/drift-history")
+async def get_model_drift_history():
+    return drift_history()
+
+
 @app.get("/api/v1/data-quality")
 async def get_data_quality():
     return data_quality()
+
+
+@app.get("/api/v1/data-quality/trend")
+async def get_data_quality_trend():
+    return data_quality_trend()
 
 
 @app.get("/api/v1/pipeline")
@@ -148,6 +225,24 @@ async def get_pipeline():
 @app.get("/api/v1/audit")
 async def get_audit():
     return audit_events()
+
+
+@app.get("/api/v1/revenue/trend")
+async def get_revenue_trend():
+    return revenue_trend()
+
+
+@app.get("/api/v1/meters")
+async def get_meters(limit: int = 50):
+    return {"items": meter_list(limit)}
+
+
+@app.get("/api/v1/meters/{meter_id}/detail")
+async def get_meter_detail(meter_id: str):
+    item = meter_profile(meter_id)
+    if item:
+        return item
+    raise HTTPException(status_code=404, detail="Meter not found")
 
 
 @app.get("/api/v1/scenario")

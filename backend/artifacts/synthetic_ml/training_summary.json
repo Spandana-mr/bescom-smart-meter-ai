@@ -1,0 +1,109 @@
+{
+  "dataset_dir": "C:\\Users\\Spandana\\Documents\\Codex\\2026-05-05\\files-mentioned-by-the-user-smart\\smart_ai_meter\\data\\bescom_dataset",
+  "artifact_dir": "C:\\Users\\Spandana\\Documents\\Codex\\2026-05-05\\files-mentioned-by-the-user-smart\\smart_ai_meter\\backend\\artifacts\\synthetic_ml",
+  "generated_at": "2026-05-12T15:37:27.409097+00:00",
+  "forecasting": {
+    "model": "QuantileGradientBoostingForecaster",
+    "status": "trained",
+    "train_rows": 5848,
+    "test_rows": 1462,
+    "features": [
+      "zone",
+      "model_name",
+      "peak_hour",
+      "forecast_mw",
+      "p10_mw",
+      "p50_mw",
+      "p90_mw",
+      "p5_mw",
+      "p95_mw",
+      "confidence_level",
+      "training_data_size",
+      "month",
+      "dayofweek",
+      "day",
+      "lag_actual",
+      "lag_forecast",
+      "error_gap"
+    ],
+    "mape": 0.0082,
+    "conformal_pad_mw": 3.349,
+    "artifacts": [
+      "forecast_preview.csv"
+    ]
+  },
+  "anomaly_detection": {
+    "model": "SyntheticAnomalyEnsemble",
+    "status": "trained",
+    "train_rows": 58631,
+    "test_rows": 14658,
+    "positive_rate_train": 0.0079,
+    "supervised": {
+      "roc_auc": 0.9985,
+      "average_precision": 0.9176,
+      "precision": 0.6398,
+      "recall": 0.952,
+      "f1": 0.7653
+    },
+    "blended": {
+      "roc_auc": 0.9973,
+      "average_precision": 0.9019,
+      "precision": 0.7857,
+      "recall": 0.88,
+      "f1": 0.8302
+    },
+    "feature_importance": [
+      {
+        "feature": "avg_existing_anomaly_score",
+        "importance": 0.541911
+      },
+      {
+        "feature": "load_factor_day",
+        "importance": 0.090671
+      },
+      {
+        "feature": "pct_change_1d",
+        "importance": 0.06392
+      },
+      {
+        "feature": "avg_kwh",
+        "importance": 0.051244
+      },
+      {
+        "feature": "flatline_score",
+        "importance": 0.044972
+      },
+      {
+        "feature": "max_kwh",
+        "importance": 0.041562
+      },
+      {
+        "feature": "peer_z",
+        "importance": 0.041513
+      },
+      {
+        "feature": "total_kwh",
+        "importance": 0.041469
+      },
+      {
+        "feature": "night_ratio",
+        "importance": 0.014958
+      },
+      {
+        "feature": "peer_std",
+        "importance": 0.012945
+      },
+      {
+        "feature": "peer_mean",
+        "importance": 0.01246
+      },
+      {
+        "feature": "avg_voltage",
+        "importance": 0.008165
+      }
+    ],
+    "artifacts": [
+      "anomaly_scores.csv"
+    ]
+  }
+}
