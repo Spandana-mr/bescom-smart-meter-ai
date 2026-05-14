@@ -170,6 +170,26 @@ def _alert_summary(row, meter=None):
     }
 
 
+def _precision_at_50():
+    precision_rows = [row for row in model_performance_rows() if row.get("metric_type") == "precision"]
+    detector_rows = [
+        row
+        for row in precision_rows
+        if "TheftDetect" in row.get("model_name", "") or "Ensemble" in row.get("model_name", "")
+    ]
+    source_rows = detector_rows or precision_rows
+    if source_rows:
+        latest_date = max(row.get("evaluation_date", "") for row in source_rows)
+        latest_values = [_float(row.get("metric_value")) for row in source_rows if row.get("evaluation_date") == latest_date]
+        if latest_values:
+            return round(mean(latest_values), 2)
+
+    feedback = feedback_rows()
+    true_positive = sum(1 for row in feedback if row.get("feedback_type") == "true_positive")
+    false_positive = sum(1 for row in feedback if row.get("feedback_type") == "false_positive")
+    return round(true_positive / max(1, true_positive + false_positive), 2)
+
+
 def kpis():
     meters = meters_rows()
     readings = reading_rows()
@@ -184,16 +204,13 @@ def kpis():
     resolved_alerts = [row for row in alerts if row.get("status") == "Resolved"]
     false_positive_alerts = [row for row in alerts if row.get("status") == "False Positive"]
     fines = sum(_float(row.get("fine_inr")) for row in audits)
-    feedback = feedback_rows()
-    true_positive = sum(1 for row in feedback if row.get("feedback_type") == "true_positive")
-    false_positive = sum(1 for row in feedback if row.get("feedback_type") == "false_positive")
 
     return {
         "metersMonitored": len(meters),
         "readsPerDay": len(readings),
         "openAlerts": len(open_alerts),
         "criticalAlerts": len(critical_alerts),
-        "precisionAt50": round(true_positive / max(1, true_positive + false_positive), 2),
+        "precisionAt50": _precision_at_50(),
         "forecastMape": round(mean([_float(row.get("mape_pct")) for row in recent_forecasts]) / 100, 3) if recent_forecasts else 0,
         "revenueAtRisk": round(sum(_float(row.get("estimated_loss_units")) * 8 for row in open_alerts), 2),
         "recoveredMtd": round(fines, 2),

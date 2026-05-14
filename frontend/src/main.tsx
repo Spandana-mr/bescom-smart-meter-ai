@@ -13,7 +13,10 @@ import {
   Gauge,
   Loader2,
   Map as MapIcon,
+  Maximize2,
   MessageSquare,
+  Minimize2,
+  Move,
   Search,
   Send,
   ShieldCheck,
@@ -260,11 +263,10 @@ function AssistantWidget({ data, page, selectedAlert, selectedMeter }: { data: R
     "Summarize today's risks",
     "Explain the forecast band",
     "High-risk zones",
-    "Inspection priorities",
-    selectedAlert ? "Explain selected alert" : "Explain anomaly",
-    selectedMeter ? "Why is this meter flagged?" : "Explain this chart"
   ];
   const [open, setOpen] = React.useState(false);
+  const [maximized, setMaximized] = React.useState(false);
+  const [position, setPosition] = React.useState({ right: 22, bottom: 22 });
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [messages, setMessages] = React.useState<ChatMessage[]>([
@@ -274,10 +276,38 @@ function AssistantWidget({ data, page, selectedAlert, selectedMeter }: { data: R
     }
   ]);
   const endRef = React.useRef<HTMLDivElement>(null);
+  const dragRef = React.useRef<{ startX: number; startY: number; startRight: number; startBottom: number } | null>(null);
 
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, busy, open]);
+
+  const dragStart = (event: React.PointerEvent<HTMLElement>) => {
+    if (maximized) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      startRight: position.right,
+      startBottom: position.bottom
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const dragMove = (event: React.PointerEvent<HTMLElement>) => {
+    if (!dragRef.current || maximized) return;
+    const panelHeight = 690;
+    const nextRight = dragRef.current.startRight - (event.clientX - dragRef.current.startX);
+    const nextBottom = dragRef.current.startBottom - (event.clientY - dragRef.current.startY);
+    setPosition({
+      right: Math.max(8, Math.min(window.innerWidth - 72, nextRight)),
+      bottom: Math.max(8, Math.min(window.innerHeight - Math.min(panelHeight, window.innerHeight - 96), nextBottom))
+    });
+  };
+
+  const dragEnd = (event: React.PointerEvent<HTMLElement>) => {
+    dragRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
 
   const send = async (text = input) => {
     const message = text.trim();
@@ -320,12 +350,37 @@ function AssistantWidget({ data, page, selectedAlert, selectedMeter }: { data: R
   };
 
   return (
-    <aside className={open ? "assistant-shell open" : "assistant-shell"}>
+    <aside
+      className={`${open ? "assistant-shell open" : "assistant-shell"} ${maximized ? "maximized" : ""}`}
+      style={maximized ? undefined : { right: position.right, bottom: position.bottom }}
+    >
       {open && (
         <section className="assistant-panel" aria-label="AI Analyst Assistant">
-          <header>
-            <div><Bot size={18} /><span><strong>BESCOM Copilot</strong><small>Grid operations assistant</small></span></div>
-            <button onClick={() => setOpen(false)} title="Close assistant"><X size={18} /></button>
+          <header onPointerDown={dragStart} onPointerMove={dragMove} onPointerUp={dragEnd} onPointerCancel={dragEnd}>
+            <div><Bot size={18} /><span><strong>EnergiX Copilot</strong><small>Grid operations assistant</small></span></div>
+            <div className="assistant-window-actions">
+              <Move size={16} />
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setMaximized((value) => !value);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                title={maximized ? "Restore assistant" : "Maximize assistant"}
+              >
+                {maximized ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+              </button>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setOpen(false);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                title="Close assistant"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </header>
           <div className="assistant-context">
             <span>{page}</span>
@@ -351,7 +406,7 @@ function AssistantWidget({ data, page, selectedAlert, selectedMeter }: { data: R
           </form>
         </section>
       )}
-      <button className="assistant-fab" onClick={() => setOpen((value) => !value)} title="Open BESCOM Copilot">
+      <button className="assistant-fab" onClick={() => setOpen((value) => !value)} title="Open EnergiX Copilot">
         {open ? <X size={20} /> : <Sparkles size={21} />}
       </button>
     </aside>
@@ -396,7 +451,7 @@ function App() {
       <header className="fixed-nav">
         <a className="brand" href="#command">
           <span className="brand-mark">B</span>
-          <span><strong>BESCOM AI</strong><small>Smart meter operations</small></span>
+          <span><strong>EnergiX AI</strong><small>Smart meter operations</small></span>
         </a>
         <nav>
           {nav.map(([id, label, Icon]) => (
