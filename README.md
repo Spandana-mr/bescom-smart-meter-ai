@@ -29,10 +29,26 @@ smart_ai_meter/
 1. Open a terminal in the project root:
 
 ```bash
-cd C:\Users\Spandana\Documents\Codex\2026-05-05\files-mentioned-by-the-user-smart\smart_ai_meter
+cd D:\bescom-smart-meter-ai
 ```
 
-2. Start the backend in VS Code terminal 1:
+2. Add your Groq API key for the backend.
+
+Create or edit `backend\.env` or set it in the backend terminal before starting the API:
+
+```powershell
+$env:GROQ_API_KEY="your_groq_api_key_here"
+```
+
+If you prefer a project-level dotenv file, copy `.env.example` to `.env` and set:
+
+```text
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+The assistant route will still work without the key, but it returns a local fallback summary instead of a Groq-generated answer.
+
+3. Start the backend in VS Code terminal 1:
 
 ```bash
 cd backend
@@ -42,19 +58,33 @@ pip install -r requirements.txt
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-3. In VS Code terminal 2, start the frontend:
+4. In VS Code terminal 2, start the frontend:
 
 ```bash
-cd C:\Users\Spandana\Documents\Codex\2026-05-05\files-mentioned-by-the-user-smart\smart_ai_meter\frontend
+cd D:\bescom-smart-meter-ai\frontend
 npm install
 $env:VITE_API_URL="http://127.0.0.1:8000"
 npm run dev
 ```
 
-4. Open:
+5. Open:
 
 - Dashboard: `http://127.0.0.1:3000`
 - API docs: `http://127.0.0.1:8000/docs`
+
+## AI Analyst Assistant
+
+The dashboard includes a floating **BESCOM Copilot** panel. It sends compact dashboard context only: KPI summaries, forecast bands, priority alerts, zone risks, feeder summaries, and masked selected meter or alert details. Raw addresses and precise private identifiers are redacted before the prompt is sent.
+
+Backend endpoint:
+
+- `POST /api/v1/assistant/chat`
+
+Groq model fallback order:
+
+- `llama-3.3-70b-versatile`
+- `mixtral-8x7b-32768`
+- `llama3-8b-8192`
 
 ## Run With The Reviewer Demo Dataset
 

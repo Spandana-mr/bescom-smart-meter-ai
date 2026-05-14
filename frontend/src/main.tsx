@@ -4,16 +4,20 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Bot,
   Check,
   ChevronRight,
   ClipboardCheck,
   Database,
   FileDown,
   Gauge,
+  Loader2,
   Map as MapIcon,
   MessageSquare,
   Search,
+  Send,
   ShieldCheck,
+  Sparkles,
   SlidersHorizontal,
   UserPlus,
   Workflow,
@@ -89,6 +93,7 @@ type AlertDetail = AlertItem & {
   shap: Array<{ name: string; value: number }>;
   feedback: Array<Record<string, string>>;
 };
+type ChatMessage = { role: "assistant" | "user"; content: string; sources?: string[]; warnings?: string[] };
 
 const configuredApiUrl = import.meta.env.VITE_API_URL || "";
 const localApiUrl =
@@ -250,6 +255,120 @@ function lineOption(points: ForecastPoint[], scenario = false): echarts.EChartsO
   };
 }
 
+function AssistantWidget({ data, page, selectedAlert, selectedMeter }: { data: ReturnType<typeof useDashboardData>; page: Page; selectedAlert: string; selectedMeter: string }) {
+  const quickPrompts = [
+    "Summarize today's risks",
+    "Explain the forecast band",
+    "High-risk zones",
+    "Inspection priorities",
+    selectedAlert ? "Explain selected alert" : "Explain anomaly",
+    selectedMeter ? "Why is this meter flagged?" : "Explain this chart"
+  ];
+  const [open, setOpen] = React.useState(false);
+  const [input, setInput] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [messages, setMessages] = React.useState<ChatMessage[]>([
+    {
+      role: "assistant",
+      content: "I can summarize risks, explain forecast uncertainty, and help investigate potential irregularities using the current dashboard context."
+    }
+  ]);
+  const endRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, busy, open]);
+
+  const send = async (text = input) => {
+    const message = text.trim();
+    if (!message || busy) return;
+    setOpen(true);
+    setInput("");
+    setBusy(true);
+    setMessages((items) => [...items, { role: "user", content: message }]);
+    const context = {
+      page,
+      selectedAlert,
+      selectedMeter,
+      kpis: data.overview.kpis,
+      zones: data.overview.zones.slice(0, 6),
+      alerts: data.alerts.slice(0, 6),
+      forecast: data.overview.forecast.slice(0, 12),
+      feeders: data.feeders.slice(0, 6),
+      dataQuality: data.overview.data_quality.slice(0, 4)
+    };
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/assistant/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, context })
+      });
+      if (!res.ok) throw new Error("assistant");
+      const payload = await res.json();
+      setMessages((items) => [...items, { role: "assistant", content: payload.answer, sources: payload.sources, warnings: payload.warnings }]);
+    } catch {
+      setMessages((items) => [
+        ...items,
+        {
+          role: "assistant",
+          content: "I could not reach the assistant API. Check that the backend is running and that GROQ_API_KEY is set in the backend environment."
+        }
+      ]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <aside className={open ? "assistant-shell open" : "assistant-shell"}>
+      {open && (
+        <section className="assistant-panel" aria-label="AI Analyst Assistant">
+          <header>
+            <div><Bot size={18} /><span><strong>BESCOM Copilot</strong><small>Grid operations assistant</small></span></div>
+            <button onClick={() => setOpen(false)} title="Close assistant"><X size={18} /></button>
+          </header>
+          <div className="assistant-context">
+            <span>{page}</span>
+            {selectedAlert && <span>Alert {selectedAlert}</span>}
+            {selectedMeter && <span>Meter selected</span>}
+          </div>
+          <div className="assistant-messages">
+            {messages.map((item, index) => (
+              <article className={`chat-bubble ${item.role}`} key={`${item.role}-${index}`}>
+                <MarkdownText text={item.content} />
+                {item.sources?.length ? <small>Sources: {item.sources.join(", ")}</small> : null}
+              </article>
+            ))}
+            {busy && <article className="chat-bubble assistant loading"><Loader2 size={15} /> Thinking through the dashboard data</article>}
+            <div ref={endRef} />
+          </div>
+          <div className="assistant-chips">
+            {quickPrompts.map((prompt) => <button key={prompt} onClick={() => send(prompt)}>{prompt}</button>)}
+          </div>
+          <form className="assistant-input" onSubmit={(event) => { event.preventDefault(); send(); }}>
+            <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask about forecasts, anomalies, zones..." />
+            <button disabled={busy || !input.trim()} title="Send question"><Send size={17} /></button>
+          </form>
+        </section>
+      )}
+      <button className="assistant-fab" onClick={() => setOpen((value) => !value)} title="Open BESCOM Copilot">
+        {open ? <X size={20} /> : <Sparkles size={21} />}
+      </button>
+    </aside>
+  );
+}
+
+function MarkdownText({ text }: { text: string }) {
+  return (
+    <div>
+      {text.split("\n").filter(Boolean).map((line, index) => {
+        const cleaned = line.replace(/^[-*]\s+/, "");
+        return <p key={`${cleaned}-${index}`}>{cleaned}</p>;
+      })}
+    </div>
+  );
+}
+
 function App() {
   const data = useDashboardData();
   const [page, setPage] = React.useState<Page>(() => (window.location.hash.replace("#", "") as Page) || "command");
@@ -298,6 +417,7 @@ function App() {
         {page === "models" && <ModelsDataPage models={data.models} drift={data.drift} dataQuality={data.overview.data_quality} dqTrend={data.dqTrend} detectors={data.overview.detectors} pipeline={data.overview.pipeline} />}
         {page === "audit" && <AuditPage audit={data.audit} revenue={data.revenue} />}
       </section>
+      <AssistantWidget data={data} page={page} selectedAlert={selectedAlert} selectedMeter={selectedMeter} />
     </main>
   );
 }

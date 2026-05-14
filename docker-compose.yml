@@ -7,10 +7,14 @@ services:
     container_name: bescom_backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - CORS_ORIGINS=http://localhost:3000
+      - BESCOM_DATA_DIR=/data/bescom_dataset
     volumes:
       - ./backend:/app
+      - ./data:/data:ro
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -23,6 +27,7 @@ services:
       - "3000:3000"
     environment:
       - VITE_API_PROXY_TARGET=http://backend:8000
+      - VITE_API_URL=http://localhost:8000
     volumes:
       - ./frontend:/app
     command: sh -c "npm install && npm run dev"
