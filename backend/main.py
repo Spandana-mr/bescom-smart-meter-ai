@@ -33,6 +33,7 @@ from app.services.ml_runtime import (
     forecast_preview,
     runtime_status,
 )
+from app.services.ai_assistant.routes import router as assistant_router
 
 app = FastAPI(
     title="BESCOM Smart Meter AI API",
@@ -47,6 +48,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(assistant_router)
 
 
 @app.get("/")

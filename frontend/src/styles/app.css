@@ -763,6 +763,230 @@ tbody tr:hover {
   border-left: 3px solid #2563eb;
 }
 
+.assistant-shell {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.assistant-shell.maximized {
+  inset: 88px 22px 22px 22px;
+  justify-items: stretch;
+}
+
+.assistant-panel,
+.assistant-fab {
+  pointer-events: auto;
+}
+
+.assistant-fab {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #1d4ed8;
+  box-shadow: 0 16px 40px rgba(29, 78, 216, .28);
+}
+
+.assistant-fab:active {
+  transform: scale(.96);
+}
+
+.assistant-panel {
+  width: min(430px, calc(100vw - 28px));
+  height: min(690px, calc(100vh - 118px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(16, 24, 40, .22);
+}
+
+.assistant-shell.maximized .assistant-panel {
+  width: 100%;
+  height: 100%;
+}
+
+.assistant-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid #eceff3;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.assistant-panel > header:active {
+  cursor: grabbing;
+}
+
+.assistant-panel > header > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.assistant-panel > header svg {
+  color: #1d4ed8;
+}
+
+.assistant-panel > header strong,
+.assistant-panel > header small {
+  display: block;
+}
+
+.assistant-window-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #667085;
+}
+
+.assistant-window-actions button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #f2f4f7;
+}
+
+.assistant-window-actions button svg {
+  color: #344054;
+}
+
+.assistant-context {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 14px 0;
+}
+
+.assistant-context span {
+  padding: 4px 8px;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.assistant-messages {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.chat-bubble {
+  width: fit-content;
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.chat-bubble p + p {
+  margin-top: 7px;
+}
+
+.chat-bubble.user {
+  justify-self: end;
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.chat-bubble.assistant {
+  justify-self: start;
+  border: 1px solid #eceff3;
+  color: #344054;
+  background: #fcfcfd;
+}
+
+.chat-bubble small {
+  display: block;
+  margin-top: 8px;
+}
+
+.chat-bubble.loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #1d4ed8;
+}
+
+.chat-bubble.loading svg {
+  animation: spin 1s linear infinite;
+}
+
+.assistant-chips {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 0 14px 12px;
+}
+
+.assistant-chips button {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  color: #344054;
+  background: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.assistant-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #eceff3;
+  background: #f8fafc;
+}
+
+.assistant-input input {
+  min-height: 40px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 0 11px;
+  outline: 0;
+}
+
+.assistant-input button {
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #1d4ed8;
+}
+
+.assistant-input button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 1200px) {
   .fixed-nav {
     grid-template-columns: 1fr auto;
@@ -839,5 +1063,18 @@ tbody tr:hover {
 
   .topology-flow {
     height: 460px;
+  }
+
+  .assistant-shell {
+    right: 14px;
+    bottom: 14px;
+  }
+
+  .assistant-panel {
+    height: min(640px, calc(100vh - 98px));
+  }
+
+  .assistant-shell.maximized {
+    inset: 84px 10px 10px 10px;
   }
 }
