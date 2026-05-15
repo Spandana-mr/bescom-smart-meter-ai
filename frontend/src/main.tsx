@@ -451,7 +451,7 @@ function App() {
       <header className="fixed-nav">
         <a className="brand" href="#command">
           <span className="brand-mark">B</span>
-          <span><strong>EnergiX AI</strong><small>Smart meter operations</small></span>
+          <span><strong>EnergiX</strong><small>Smart meter operations</small></span>
         </a>
         <nav>
           {nav.map(([id, label, Icon]) => (
