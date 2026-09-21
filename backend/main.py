@@ -34,6 +34,13 @@ from app.services.ml_runtime import (
     runtime_status,
 )
 from app.services.ai_assistant.routes import router as assistant_router
+from app.services.energy_accounting import (
+    ea_feeders,
+    ea_substations,
+    ea_summary,
+    ea_transformer_detail,
+    ea_transformers,
+)
 
 app = FastAPI(
     title="BESCOM Smart Meter AI API",
@@ -255,3 +262,77 @@ async def get_scenario(
     holiday: bool = False,
 ):
     return scenario_points(temperature_delta, industrial_multiplier, holiday)
+
+
+# ── Energy Accounting routes ──────────────────────────────────────────────────
+# These are strictly additive — no existing route is modified.
+
+
+@app.get("/api/v1/energy-accounting/summary")
+async def get_ea_summary(
+    zone: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+):
+    """
+    Aggregate energy-accounting KPIs across all distribution transformers.
+    Optionally filtered by zone and/or date range (YYYY-MM-DD).
+    """
+    return ea_summary(zone=zone, start_date=start_date, end_date=end_date)
+
+
+@app.get("/api/v1/energy-accounting/transformers")
+async def get_ea_transformers(
+    zone: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int = 20,
+):
+    """
+    Distribution transformers ranked by unexplained_pct descending.
+    Optionally filtered by zone and/or date range.
+    """
+    return ea_transformers(zone=zone, start_date=start_date, end_date=end_date, limit=limit)
+
+
+@app.get("/api/v1/energy-accounting/transformers/{transformer_id}")
+async def get_ea_transformer_detail(
+    transformer_id: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+):
+    """
+    Drill-down for a single distribution transformer:
+    transformer metadata, daily energy-accounting series,
+    mapped meters, and cross-referenced anomaly alerts.
+    """
+    item = ea_transformer_detail(
+        transformer_id=transformer_id, start_date=start_date, end_date=end_date
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Transformer not found")
+    return item
+
+
+@app.get("/api/v1/energy-accounting/feeders")
+async def get_ea_feeders(
+    zone: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+):
+    """
+    Feeder-level energy rollup view, aggregated over the date range.
+    """
+    return ea_feeders(zone=zone, start_date=start_date, end_date=end_date)
+
+
+@app.get("/api/v1/energy-accounting/substations")
+async def get_ea_substations(
+    zone: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+):
+    """
+    Substation-level energy rollup view, aggregated over the date range.
+    """
+    return ea_substations(zone=zone, start_date=start_date, end_date=end_date)

@@ -26,7 +26,36 @@ You are a senior full-stack ML engineer and systems architect. Your task is to b
 **Sensitivity:** No external LLM on meter data. All NL generation is template-based.  
 **Deployment:** Docker + Kubernetes. On-premise preferred; cloud GPU for training only.
 
+### Energy Accounting Layer (Pass 1 — complete)
+
+A **distribution-transformer (DT) level energy-accounting layer** has been added as a network-level view that operates independently of the per-meter ML pipeline above.
+
+**Architectural role:** The layer sits between the substation and the meter:
+
+```
+Substation (outgoing secondary side)
+  └── Feeder(s)
+        └── Distribution Transformer (DT)
+              └── Meters (meter-level ML pipeline)
+```
+
+At each level the accounting engine computes:
+
+```
+unexplained_kwh = input_kwh − metered_kwh − technical_loss_kwh
+```
+
+A non-trivial `unexplained_pct` at the DT level flags that transformer for investigation — independently of whether any individual meter looks anomalous. This solves the "vacation problem": a zone-wide demand drop (holiday, weather) reduces both sides of the balance equally and produces no unexplained energy, so it is never escalated.
+
+**Scope boundary:** Analysis starts at the substation's outgoing (secondary) side. Generation and transmission upstream of the substation are out of scope.
+
+**Data:** Five new CSVs in `data/bescom_dataset/` (2023-01-01 to 2024-12-31): `distribution_transformers.csv`, `meter_transformer_map.csv`, `transformer_energy_daily.csv`, `feeder_energy_daily.csv`, `substation_energy_daily.csv`. Technical-loss figures are **synthetic/parametric**, not measured.
+
+**Integration with ML pipeline (Pass 2 — not yet done):** In the next pass, `unexplained_pct` will be fed as an additional feature into the meta-classifier alongside VAE/EIF/BOCPD/GNN scores. Until that pass is complete, the two evidence streams are deliberately kept separate.
+
 ---
+
+
 
 ## 1. COMPLETE TECHNOLOGY STACK
 

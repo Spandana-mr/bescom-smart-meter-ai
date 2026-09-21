@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   BarChart3,
   Bot,
+  Calendar,
   Check,
   ChevronRight,
   ClipboardCheck,
@@ -24,7 +25,8 @@ import {
   SlidersHorizontal,
   UserPlus,
   Workflow,
-  X
+  X,
+  Zap
 } from "lucide-react";
 import * as echarts from "echarts";
 import {
@@ -41,7 +43,10 @@ import "@xyflow/react/dist/style.css";
 import "./styles/app.css";
 
 type Risk = "Critical" | "High" | "Medium" | "Low" | "Normal";
-type Page = "command" | "alerts" | "meters" | "forecast" | "grid" | "models" | "audit";
+type Page = "command" | "alerts" | "meters" | "forecast" | "grid" | "models" | "audit" | "energy";
+type EASummary = { total_input_kwh: number; total_metered_kwh: number; total_technical_loss_kwh: number; total_unexplained_kwh: number; unexplained_pct: number; note?: string };
+type EATransformerItem = { transformer_id: string; feeder_id: string; zone: string; rated_kva: number; location_type: string; total_input_kwh: number; total_metered_kwh: number; total_technical_loss_kwh: number; total_unexplained_kwh: number; unexplained_pct: number; days_in_range: number };
+type EATransformerDetail = { transformer: Record<string, string | number>; daily_series: Array<{ date: string; input_kwh: number; metered_kwh: number; technical_loss_kwh: number; unexplained_kwh: number; unexplained_pct: number }>; meters: Array<{ meter_id: string; feeder_id: string; substation_id: string; zone: string }>; related_alerts: Array<{ alert_id: string; meter_id: string; alert_timestamp: string; severity: string; status: string; anomaly_score: number; consumption_drop_pct: number; estimated_daily_loss_inr: number }> };
 type AlertItem = {
   id: string;
   meterId: string;
@@ -176,6 +181,8 @@ function useDashboardData() {
   const [graph, setGraph] = React.useState<any>({ nodes: [], edges: [] });
   const [audit, setAudit] = React.useState<any[]>([]);
   const [zoneMap, setZoneMap] = React.useState<any>({ features: [] });
+  const [eaSummary, setEaSummary] = React.useState<EASummary | null>(null);
+  const [eaTransformers, setEaTransformers] = React.useState<EATransformerItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshToken, setRefreshToken] = React.useState(0);
 
@@ -192,9 +199,11 @@ function useDashboardData() {
       api<any[]>("/api/v1/feeders/balance", []),
       api<any>("/api/v1/feeders/graph", { nodes: [], edges: [] }),
       api<any[]>("/api/v1/audit", []),
-      api<any>("/api/v1/zones/map", { features: [] })
+      api<any>("/api/v1/zones/map", { features: [] }),
+      api<EASummary | null>("/api/v1/energy-accounting/summary?start_date=2023-01-01&end_date=2024-12-31", null),
+      api<{ items: EATransformerItem[] }>("/api/v1/energy-accounting/transformers?limit=50&start_date=2023-01-01&end_date=2024-12-31", { items: [] })
     ])
-      .then(([nextOverview, alertResp, meterResp, modelResp, driftResp, dqResp, revenueResp, feederResp, graphResp, auditResp, mapResp]) => {
+      .then(([nextOverview, alertResp, meterResp, modelResp, driftResp, dqResp, revenueResp, feederResp, graphResp, auditResp, mapResp, eaSummaryResp, eaTransformersResp]) => {
         setOverview(nextOverview);
         setAlerts(alertResp.items.length ? alertResp.items : nextOverview.alerts);
         setMeters(meterResp.items);
@@ -206,11 +215,13 @@ function useDashboardData() {
         setGraph(graphResp);
         setAudit(auditResp);
         setZoneMap(mapResp);
+        setEaSummary(eaSummaryResp);
+        setEaTransformers(eaTransformersResp.items);
       })
       .finally(() => setLoading(false));
   }, [refreshToken]);
 
-  return { overview, alerts, setAlerts, meters, models, drift, dqTrend, revenue, feeders, graph, audit, zoneMap, loading, refresh: () => setRefreshToken((value) => value + 1) };
+  return { overview, alerts, setAlerts, meters, models, drift, dqTrend, revenue, feeders, graph, audit, zoneMap, eaSummary, eaTransformers, loading, refresh: () => setRefreshToken((value) => value + 1) };
 }
 
 function useScenario(temp: number, multiplier: number, holiday: boolean) {
@@ -443,7 +454,8 @@ function App() {
     ["forecast", "Forecast", BarChart3],
     ["grid", "Grid", MapIcon],
     ["models", "Models", Activity],
-    ["audit", "Audit", ClipboardCheck]
+    ["audit", "Audit", ClipboardCheck],
+    ["energy", "Energy", Zap]
   ] as const;
 
   return (
@@ -471,6 +483,7 @@ function App() {
         {page === "grid" && <GridPage zones={data.overview.zones} zoneMap={data.zoneMap} feeders={data.feeders} graph={data.graph} />}
         {page === "models" && <ModelsDataPage models={data.models} drift={data.drift} dataQuality={data.overview.data_quality} dqTrend={data.dqTrend} detectors={data.overview.detectors} pipeline={data.overview.pipeline} />}
         {page === "audit" && <AuditPage audit={data.audit} revenue={data.revenue} />}
+        {page === "energy" && <EnergyAccountingPage summary={data.eaSummary} transformers={data.eaTransformers} />}
       </section>
       <AssistantWidget data={data} page={page} selectedAlert={selectedAlert} selectedMeter={selectedMeter} />
     </main>
@@ -1058,6 +1071,336 @@ function dqOption(rows: any[]): echarts.EChartsOption {
       { name: "Drift PSI", type: "line", data: rows.map((row) => row.psi), smooth: true, symbol: "none", lineStyle: { color: "#dc2626", width: 2 } }
     ]
   };
+}
+
+// ── Energy Accounting helpers ────────────────────────────────────────────────
+
+function eaUnexplainedBarOption(series: EATransformerDetail["daily_series"]): echarts.EChartsOption {
+  const dates = series.map((r) => r.date);
+  return {
+    tooltip: { trigger: "axis" },
+    legend: { top: 0, textStyle: { color: "#667085" } },
+    grid: { top: 42, right: 16, bottom: 28, left: 64 },
+    xAxis: { type: "category", data: dates, axisLabel: { color: "#667085", rotate: 30 } },
+    yAxis: { type: "value", name: "kWh", axisLabel: { color: "#667085" }, splitLine: { lineStyle: { color: "#edf0f4" } } },
+    series: [
+      { name: "Input", type: "bar", stack: "total", data: series.map((r) => r.input_kwh), itemStyle: { color: "#93c5fd" } },
+      { name: "Metered", type: "line", data: series.map((r) => r.metered_kwh), smooth: true, symbol: "none", lineStyle: { color: "#2563eb", width: 2 } },
+      { name: "Unexplained kWh", type: "bar", data: series.map((r) => r.unexplained_kwh), itemStyle: { color: "#f97316" } }
+    ]
+  };
+}
+
+function eaUnexplainedPctOption(series: EATransformerDetail["daily_series"]): echarts.EChartsOption {
+  const dates = series.map((r) => r.date);
+  return {
+    tooltip: { trigger: "axis", formatter: (params: any) => `${params[0].name}<br/>Unexplained: ${Number(params[0].value).toFixed(3)}%` },
+    grid: { top: 12, right: 16, bottom: 28, left: 56 },
+    xAxis: { type: "category", data: dates, axisLabel: { color: "#667085", rotate: 30 } },
+    yAxis: { type: "value", name: "%", axisLabel: { color: "#667085" }, splitLine: { lineStyle: { color: "#edf0f4" } } },
+    series: [
+      { name: "Unexplained %", type: "line", data: series.map((r) => r.unexplained_pct), smooth: true, symbol: "none", lineStyle: { color: "#dc2626", width: 2 }, areaStyle: { color: "rgba(220,38,38,0.12)" } }
+    ]
+  };
+}
+
+// ── EnergyAccountingPage ─────────────────────────────────────────────────────
+
+const ANCHOR_END = "2024-12-31";
+
+function computePresetRange(preset: string): { start: string; end: string; label: string } {
+  if (preset === "7d") {
+    return { start: "2024-12-25", end: ANCHOR_END, label: "Last 7 days" };
+  } else if (preset === "30d") {
+    return { start: "2024-12-02", end: ANCHOR_END, label: "Last 30 days" };
+  } else if (preset === "90d") {
+    return { start: "2024-10-03", end: ANCHOR_END, label: "Last 90 days" };
+  } else if (preset === "1y") {
+    return { start: "2024-01-01", end: ANCHOR_END, label: "Last 1 year" };
+  } else if (preset === "all") {
+    return { start: "2023-01-01", end: ANCHOR_END, label: "All time" };
+  }
+  return { start: "2024-12-02", end: ANCHOR_END, label: "Last 30 days" };
+}
+
+function EnergyAccountingPage({ summary: initialSummary, transformers: initialTransformers }: { summary?: EASummary | null; transformers?: EATransformerItem[] }) {
+  const [rangeKey, setRangeKey] = React.useState<string>("30d");
+  const [customStart, setCustomStart] = React.useState<string>("2024-12-01");
+  const [customEnd, setCustomEnd] = React.useState<string>("2024-12-31");
+  const [activeRange, setActiveRange] = React.useState<{ start: string; end: string; label: string }>(() => computePresetRange("30d"));
+
+  const [summary, setSummary] = React.useState<EASummary | null>(null);
+  const [transformers, setTransformers] = React.useState<EATransformerItem[]>([]);
+  const [eaLoading, setEaLoading] = React.useState<boolean>(false);
+
+  const [selectedDt, setSelectedDt] = React.useState<string>("");
+  const [detail, setDetail] = React.useState<EATransformerDetail | null>(null);
+  const [detailLoading, setDetailLoading] = React.useState<boolean>(false);
+  const [zoneFilter, setZoneFilter] = React.useState<string>("all");
+
+  const handlePresetChange = (key: string) => {
+    setRangeKey(key);
+    if (key !== "custom") {
+      setActiveRange(computePresetRange(key));
+    }
+  };
+
+  const applyCustomRange = () => {
+    if (!customStart || !customEnd) return;
+    const start = customStart <= customEnd ? customStart : customEnd;
+    const end = customStart <= customEnd ? customEnd : customStart;
+    setActiveRange({
+      start,
+      end,
+      label: `${start} to ${end}`
+    });
+  };
+
+  // Re-fetch summary & ranked transformers whenever activeRange changes
+  React.useEffect(() => {
+    setEaLoading(true);
+    const q = `?start_date=${encodeURIComponent(activeRange.start)}&end_date=${encodeURIComponent(activeRange.end)}`;
+    Promise.all([
+      api<EASummary | null>(`/api/v1/energy-accounting/summary${q}`, null),
+      api<{ items: EATransformerItem[] }>(`/api/v1/energy-accounting/transformers${q}&limit=50`, { items: [] })
+    ])
+      .then(([s, t]) => {
+        setSummary(s);
+        setTransformers(t.items);
+      })
+      .finally(() => setEaLoading(false));
+  }, [activeRange]);
+
+  // Re-fetch detail whenever selectedDt OR activeRange changes
+  React.useEffect(() => {
+    if (!selectedDt) {
+      setDetail(null);
+      return;
+    }
+    setDetailLoading(true);
+    const q = `?start_date=${encodeURIComponent(activeRange.start)}&end_date=${encodeURIComponent(activeRange.end)}`;
+    api<EATransformerDetail | null>(
+      `/api/v1/energy-accounting/transformers/${encodeURIComponent(selectedDt)}${q}`,
+      null
+    )
+      .then((res) => setDetail(res))
+      .finally(() => setDetailLoading(false));
+  }, [selectedDt, activeRange]);
+
+  const selectDt = React.useCallback((tid: string) => {
+    setSelectedDt(tid);
+  }, []);
+
+  const zones = React.useMemo(() => ["all", ...Array.from(new Set(transformers.map((t) => t.zone))).sort()], [transformers]);
+  const filtered = zoneFilter === "all" ? transformers : transformers.filter((t) => t.zone === zoneFilter);
+
+  const fmtKwh = (v: number) => Intl.NumberFormat("en-IN", { notation: "compact", maximumFractionDigits: 1 }).format(v) + " kWh";
+
+  return (
+    <>
+      <PageHeader
+        title="Energy Accounting"
+        subtitle="Distribution-transformer level energy balance — a network-level view independent of per-meter consumption signals. Technical-loss figures are synthetic/parametric (not field-measured)."
+      />
+
+      {/* ── Date range selector toolbar ── */}
+      <section className="toolbar" style={{ alignItems: "center", gap: 12, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Calendar size={16} color="#475467" />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#344054" }}>Date range:</span>
+          <select
+            id="ea-date-range-select"
+            value={rangeKey}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            style={{
+              minHeight: 36,
+              padding: "6px 12px",
+              borderRadius: 8,
+              border: "1px solid #d0d5dd",
+              background: "#ffffff",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "#1d2939",
+              cursor: "pointer"
+            }}
+          >
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="1y">Last 1 year</option>
+            <option value="all">All time</option>
+            <option value="custom">Custom range</option>
+          </select>
+        </div>
+
+        {rangeKey === "custom" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#475467" }}>
+              <span>From:</span>
+              <input
+                id="ea-custom-start-date"
+                type="date"
+                value={customStart}
+                min="2023-01-01"
+                max="2024-12-31"
+                onChange={(e) => setCustomStart(e.target.value)}
+                style={{
+                  minHeight: 36,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #d0d5dd",
+                  background: "#ffffff",
+                  fontSize: 13,
+                  color: "#1d2939"
+                }}
+              />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#475467" }}>
+              <span>To:</span>
+              <input
+                id="ea-custom-end-date"
+                type="date"
+                value={customEnd}
+                min="2023-01-01"
+                max="2024-12-31"
+                onChange={(e) => setCustomEnd(e.target.value)}
+                style={{
+                  minHeight: 36,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #d0d5dd",
+                  background: "#ffffff",
+                  fontSize: 13,
+                  color: "#1d2939"
+                }}
+              />
+            </label>
+            <button
+              id="ea-apply-custom-date-range"
+              className="sync"
+              style={{ padding: "6px 14px", minHeight: 36, fontWeight: 600 }}
+              onClick={applyCustomRange}
+            >
+              Apply range
+            </button>
+          </div>
+        )}
+
+        <div style={{ marginLeft: "auto", fontSize: 12, color: "#667085" }}>
+          {eaLoading ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Fetching accounting data…
+            </span>
+          ) : (
+            <span>Scope: <strong>{activeRange.start || "2023-01-01"}</strong> to <strong>{activeRange.end || "2024-12-31"}</strong> ({activeRange.label})</span>
+          )}
+        </div>
+      </section>
+
+      {/* ── Summary KPI strip ── */}
+      {summary && (
+        <section className="kpi-grid">
+          <Metric icon={Zap} label={`Total input (${activeRange.label})`} value={fmtKwh(summary.total_input_kwh)} />
+          <Metric icon={Activity} label="Total metered" value={fmtKwh(summary.total_metered_kwh)} />
+          <Metric icon={Database} label="Technical loss (parametric)" value={fmtKwh(summary.total_technical_loss_kwh)} />
+          <Metric icon={AlertTriangle} label="Unexplained energy" value={fmtKwh(summary.total_unexplained_kwh)} tone="warn" />
+          <Metric icon={BarChart3} label="Unexplained %" value={`${summary.unexplained_pct.toFixed(3)}%`} tone={summary.unexplained_pct > 2 ? "warn" : ""} />
+        </section>
+      )}
+
+      <section className="dashboard-grid">
+        {/* ── Ranked DT table ── */}
+        <Panel title="Transformers Requiring Review" action="Ranked by unexplained %">
+          <div className="toolbar" style={{ marginBottom: 8 }}>
+            <Segment value={zoneFilter} onChange={setZoneFilter} options={zones} />
+          </div>
+          <div className="alert-list" style={{ maxHeight: 520, overflowY: "auto" }}>
+            {filtered.length === 0 && <p className="muted">No data for selected filters.</p>}
+            {filtered.map((dt) => (
+              <button
+                id={`ea-dt-${dt.transformer_id}`}
+                className={`alert-row clickable${selectedDt === dt.transformer_id ? " selected" : ""}`}
+                key={dt.transformer_id}
+                onClick={() => selectDt(dt.transformer_id)}
+              >
+                <div>
+                  <span className={riskClass(dt.unexplained_pct > 5 ? "Critical" : dt.unexplained_pct > 2 ? "High" : dt.unexplained_pct > 0.5 ? "Medium" : "Normal")}>
+                    {dt.unexplained_pct.toFixed(2)}%
+                  </span>
+                  <strong>{dt.transformer_id}</strong>
+                  <small>{dt.zone} / {dt.feeder_id} / {dt.rated_kva} kVA / {dt.location_type}</small>
+                  <p>Input {fmtKwh(dt.total_input_kwh)} · Metered {fmtKwh(dt.total_metered_kwh)} · Unexplained {fmtKwh(dt.total_unexplained_kwh)} over {dt.days_in_range} days</p>
+                </div>
+                <ChevronRight size={18} />
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        {/* ── Drill-down panel ── */}
+        <Panel title="Transformer Detail" action={selectedDt || "Select a transformer"}>
+          {!selectedDt && (
+            <p className="muted">Click a row on the left to see its daily energy-accounting trend, mapped meters, and any cross-referenced anomaly alerts.</p>
+          )}
+          {detailLoading && <p className="muted"><Loader2 size={15} style={{ display: "inline" }} /> Loading detail…</p>}
+          {detail && !detailLoading && (
+            <div className="detail-stack">
+              {/* Transformer metadata */}
+              <div className="info-grid">
+                {Object.entries(detail.transformer).map(([k, v]) => (
+                  <Info key={k} label={k.replace(/_/g, " ")} value={String(v)} />
+                ))}
+              </div>
+
+              {/* Daily trend charts */}
+              {detail.daily_series.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: 16, marginBottom: 4, fontSize: 13, color: "#344054" }}>Daily energy balance (input / metered / unexplained kWh)</h3>
+                  <Chart option={eaUnexplainedBarOption(detail.daily_series)} height={240} />
+                  <h3 style={{ marginTop: 12, marginBottom: 4, fontSize: 13, color: "#344054" }}>Daily unexplained-energy percentage</h3>
+                  <Chart option={eaUnexplainedPctOption(detail.daily_series)} height={180} />
+                </>
+              )}
+
+              {/* Mapped meters */}
+              <h3 style={{ marginTop: 16, marginBottom: 4, fontSize: 13, color: "#344054" }}>Meters mapped to this transformer ({detail.meters.length})</h3>
+              <table>
+                <thead><tr><th>Meter ID</th><th>Feeder</th><th>Substation</th><th>Zone</th></tr></thead>
+                <tbody>
+                  {detail.meters.map((m) => (
+                    <tr key={m.meter_id}><td>{m.meter_id}</td><td>{m.feeder_id}</td><td>{m.substation_id}</td><td>{m.zone}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Cross-referenced alerts */}
+              {detail.related_alerts.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: 16, marginBottom: 4, fontSize: 13, color: "#344054" }}>Cross-referenced anomaly alerts ({detail.related_alerts.length})</h3>
+                  <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Alerts from the meter-level ML pipeline for meters under this transformer. Listed for corroboration only — a meter-level consumption drop alone is not sufficient evidence of irregularity.</p>
+                  <div className="alert-list compact">
+                    {detail.related_alerts.map((a) => (
+                      <div className="alert-row" key={a.alert_id}>
+                        <div>
+                          <span className={riskClass((a.severity as Risk) || "Medium")}>{a.severity}</span>
+                          <strong>{a.meter_id}</strong>
+                          <small>{a.alert_timestamp} · Score {a.anomaly_score.toFixed(2)} · Drop {a.consumption_drop_pct.toFixed(1)}%</small>
+                          <p>Status: {a.status} · Est. loss INR {Intl.NumberFormat("en-IN").format(Math.round(a.estimated_daily_loss_inr))}/day</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {detail.related_alerts.length === 0 && (
+                <p className="muted" style={{ marginTop: 12 }}>No anomaly alerts found for meters under this transformer in the selected date range.</p>
+              )}
+            </div>
+          )}
+        </Panel>
+      </section>
+    </>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(<App />);

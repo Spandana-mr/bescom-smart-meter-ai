@@ -6,9 +6,57 @@ Minimal full-stack dashboard for BESCOM smart meter demand forecasting, theft de
 
 - FastAPI backend with operational dashboard endpoints under `/api/v1`.
 - React + TypeScript + Vite dashboard with a compact navigation model.
-- Dashboard coverage for ingestion health, demand forecasts, anomaly alerts, zone risk, detector/model health, data quality, topology, scenario analysis, and audit events.
+- Dashboard coverage for ingestion health, demand forecasts, anomaly alerts, zone risk, detector/model health, data quality, topology, scenario analysis, audit events, and **energy accounting**.
 - Render-ready `render.yaml` with separate API and static dashboard services.
 - Docker Compose for local full-stack development.
+
+## Energy Accounting Layer
+
+The platform now includes a **distribution-transformer (DT) level energy-accounting layer** — a network-level view of unexplained energy loss that is independent of per-meter consumption signals.
+
+### Why it exists
+
+Naive theft detection asks: "did this meter's consumption look unusual?" — which misclassifies legitimate demand drops (vacations, seasonal closures, weather) as theft. Real distribution utilities use a hierarchical approach:
+
+1. **Network level (energy accounting)**: does energy delivered into a DT reconcile with what its downstream meters report, after expected technical loss? An unexplained gap flags the DT for investigation, regardless of individual meter movements.
+2. **Meter level (ML pipeline — separate layer)**: within a flagged DT, existing anomaly signals help identify which specific meters are most likely responsible.
+
+These two evidence streams are deliberately kept separate in this pass. Pass 2 will integrate `unexplained_pct` as an additional feature in the meta-classifier.
+
+### Scope
+
+Analysis starts at the BESCOM substation's outgoing (secondary) side and goes downstream only: **substation → feeder → DT → meter**. Nothing upstream of the substation is modeled.
+
+### Data sources
+
+Five new CSVs in `data/bescom_dataset/` cover 2023-01-01 to 2024-12-31:
+
+| File | Contents |
+|---|---|
+| `distribution_transformers.csv` | DT registry (36 transformers) |
+| `meter_transformer_map.csv` | Meter → DT assignment for all 500 meters |
+| `transformer_energy_daily.csv` | DT × day: input, metered, technical loss, unexplained energy |
+| `feeder_energy_daily.csv` | Feeder × day rollup |
+| `substation_energy_daily.csv` | Substation × day rollup |
+
+> **Note**: Technical-loss figures are **synthetic/parametric** (not field-measured). They were derived from `grid_topology.csv` feeder-loss parameters during data generation. See `data/ENERGY_ACCOUNTING_DATA_README.md` for full methodology.
+
+### New API endpoints
+
+```
+GET /api/v1/energy-accounting/summary            Aggregate KPIs (zone, date range)
+GET /api/v1/energy-accounting/transformers       DTs ranked by unexplained_pct desc
+GET /api/v1/energy-accounting/transformers/{id}  DT drill-down: daily series + meters + alerts
+GET /api/v1/energy-accounting/feeders            Feeder rollup
+GET /api/v1/energy-accounting/substations        Substation rollup
+```
+
+### Dashboard tab
+
+A new **Energy** tab in the dashboard shows:
+- Summary panel (5 KPIs: total input, metered, technical loss, unexplained kWh, unexplained %)
+- Ranked DT table with zone-filter and unexplained-% colour coding
+- Drill-down panel per DT: daily energy balance chart, unexplained-% trend, mapped meters, and cross-referenced anomaly alerts
 
 ## Project Structure
 
