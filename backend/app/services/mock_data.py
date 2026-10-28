@@ -136,6 +136,8 @@ def _severity_rank(risk):
 
 
 def _alert_summary(row, meter=None):
+    from app.services.ml_runtime import _meter_to_transformer_map, _dt_recent_unexplained_map
+
     probability = _float(row.get("anomaly_score"))
     revenue_impact = round(
         _float(row.get("estimated_daily_loss_inr"), _float(row.get("estimated_loss_units")) * 8),
@@ -150,6 +152,11 @@ def _alert_summary(row, meter=None):
         f"{modality.replace('_', ' ')} signature with {drop:.1f}% consumption shift. "
         f"Estimated loss is INR {revenue_impact:,.0f}/day; {detector_count}/4 detectors agree."
     )
+
+    mid = row.get("meter_id", "")
+    dt_id = _meter_to_transformer_map().get(mid)
+    dt_unexplained = _dt_recent_unexplained_map().get(dt_id) if dt_id else None
+
     return {
         "id": row.get("alert_id"),
         "meterId": row.get("meter_id"),
@@ -167,6 +174,8 @@ def _alert_summary(row, meter=None):
         "nextAction": _next_action(row),
         "reasonCode": row.get("alert_reason_code") or "ANOMALY_SCORE",
         "modality": modality,
+        "transformerId": dt_id,
+        "dtUnexplainedPct": dt_unexplained,
     }
 
 

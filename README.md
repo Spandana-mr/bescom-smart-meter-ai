@@ -10,6 +10,110 @@ Minimal full-stack dashboard for BESCOM smart meter demand forecasting, theft de
 - Render-ready `render.yaml` with separate API and static dashboard services.
 - Docker Compose for local full-stack development.
 
+## Project Architecture
+
+```text
+bescom-smart-meter-ai/
+│
+├── backend/                          # FastAPI API and service layer
+│   ├── app/                          # Application package
+│   │   ├── models/                   # Pydantic schemas & data models
+│   │   │   ├── __init__.py
+│   │   │   └── schemas.py
+│   │   ├── services/                 # Business logic & data services
+│   │   │   ├── ai_assistant/         # Copilot chat (Groq LLM integration)
+│   │   │   │   ├── context_builder.py
+│   │   │   │   ├── groq_client.py
+│   │   │   │   ├── prompt_builder.py
+│   │   │   │   ├── response_formatter.py
+│   │   │   │   ├── routes.py
+│   │   │   │   └── tools.py
+│   │   │   ├── energy_accounting.py  # DT-level energy balance service
+│   │   │   ├── ml_runtime.py         # Synthetic ML model runtime
+│   │   │   └── mock_data.py          # Sample data generators
+│   │   └── __init__.py
+│   ├── artifacts/                    # Persisted ML artifacts
+│   │   └── synthetic_ml/             # Trained model outputs
+│   │       ├── anomaly_scores.csv
+│   │       ├── forecast_preview.csv
+│   │       └── training_summary.json
+│   ├── main.py                       # FastAPI app entry point & route definitions
+│   ├── legacy_main.py                # Legacy API (preserved for reference)
+│   ├── Dockerfile                    # Backend container image
+│   ├── requirements.txt              # Core Python dependencies
+│   └── requirements-full.txt         # Extended dependencies (research stack)
+│
+├── frontend/                         # React + TypeScript dashboard
+│   ├── src/                          # Source code
+│   │   ├── styles/                   # CSS stylesheets
+│   │   │   └── app.css               # Global dashboard styles
+│   │   ├── main.tsx                  # Single-file React app (all pages & components)
+│   │   └── vite-env.d.ts            # Vite type declarations
+│   ├── dist/                         # Production build output
+│   ├── index.html                    # HTML entry point
+│   ├── package.json                  # NPM dependencies & scripts
+│   ├── tsconfig.json                 # TypeScript configuration
+│   ├── vite.config.js                # Vite config (JavaScript)
+│   └── vite.config.ts                # Vite config (TypeScript)
+│
+├── ml/                               # Research ML modules
+│   ├── anomaly_detection/            # Theft & anomaly detectors
+│   │   ├── eif_bocpd_meta.py         # Extended Isolation Forest + BOCPD meta-classifier
+│   │   ├── gnn_detector.py           # Graph Neural Network detector
+│   │   └── vae_detector.py           # Variational Autoencoder detector
+│   ├── demand_forecasting/           # Load forecasting models
+│   │   └── lightgbm_forecaster.py    # LightGBM quantile forecaster
+│   ├── explainability/               # Model interpretability
+│   │   ├── alert_nlg.py              # Natural-language alert generation
+│   │   └── causal_filter.py          # Causal inference filter
+│   └── training/                     # Training utilities
+│       ├── peer_clustering.py        # Meter peer-group clustering
+│       └── walk_forward_cv.py        # Walk-forward cross-validation
+│
+├── data/                             # Datasets
+│   ├── bescom_dataset/               # Primary BESCOM dataset (2023-2024)
+│   │   ├── meter_readings.csv        # 500-meter daily readings
+│   │   ├── meters.csv                # Meter registry
+│   │   ├── demand_forecasts.csv      # Forecasted demand
+│   │   ├── anomaly_alerts.csv        # Anomaly alert history
+│   │   ├── alert_feedback.csv        # Field feedback on alerts
+│   │   ├── data_quality.csv          # Data quality metrics
+│   │   ├── grid_topology.csv         # Network topology
+│   │   ├── audit_events.csv          # Audit trail
+│   │   ├── model_performance_history.csv
+│   │   ├── distribution_transformers.csv   # DT registry (36 transformers)
+│   │   ├── meter_transformer_map.csv       # Meter → DT assignments
+│   │   ├── transformer_energy_daily.csv    # DT daily energy balance
+│   │   ├── feeder_energy_daily.csv         # Feeder daily rollup
+│   │   ├── substation_energy_daily.csv     # Substation daily rollup
+│   │   └── schema_manifest.json      # Dataset schema definitions
+│   ├── demo_edge_cases/              # Reviewer demo dataset (edge cases)
+│   ├── BESCOM_Dataset_README.md      # Dataset documentation
+│   └── ENERGY_ACCOUNTING_DATA_README.md  # Energy accounting data methodology
+│
+├── data-pipeline/                    # PySpark ETL pipeline
+│   └── spark_pipeline.py            # Spark ingestion & transformation job
+│
+├── scripts/                          # Utility scripts
+│   ├── init_db.sql                   # Database bootstrap schema (TimescaleDB)
+│   ├── gen_energy_accounting_data.py # Synthetic energy accounting data generator
+│   └── train_synthetic_models.py     # Train lightweight ML models locally
+│
+├── prompts/                          # Antigravity / LLM prompt archive
+│   ├── antigravity_prompt_pass1_energy_accounting.md
+│   ├── antigravity_prompt_pass1_followup_date_range_and_checkpoint.md
+│   ├── antigravity_prompt_pass2_risk_pipeline.md
+│   └── antigravity_prompt_pass2_verification.md
+│
+├── BESCOM_Master_Builder_Prompt.md   # Master project specification
+├── docker-compose.yml                # Local container orchestration
+├── render.yaml                       # Render deployment blueprint
+├── .env.example                      # Environment variable template
+├── .gitignore                        # Git ignore rules
+├── package.json                      # Root workspace config
+└── package-lock.json                 # Root lockfile
+```
+
 ## Energy Accounting Layer
 
 The platform now includes a **distribution-transformer (DT) level energy-accounting layer** — a network-level view of unexplained energy loss that is independent of per-meter consumption signals.
@@ -58,26 +162,12 @@ A new **Energy** tab in the dashboard shows:
 - Ranked DT table with zone-filter and unexplained-% colour coding
 - Drill-down panel per DT: daily energy balance chart, unexplained-% trend, mapped meters, and cross-referenced anomaly alerts
 
-## Project Structure
-
-```text
-smart_ai_meter/
-  backend/                 FastAPI API and lightweight service layer
-  frontend/                React dashboard
-  ml/                      Foundational ML modules from the starter zip
-  data-pipeline/           PySpark pipeline scaffold
-  scripts/                 Database bootstrap SQL
-  infrastructure/          Deployment expansion point
-  docker-compose.yml       Local container workflow
-  render.yaml              Render blueprint
-```
-
 ## Run Locally Without Docker
 
 1. Open a terminal in the project root:
 
 ```bash
-cd D:\bescom-smart-meter-ai
+cd D:\Projects\bescom-smart-meter-ai_newFeature
 ```
 
 2. Add your Groq API key for the backend.
@@ -109,7 +199,7 @@ python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 4. In VS Code terminal 2, start the frontend:
 
 ```bash
-cd D:\bescom-smart-meter-ai\frontend
+cd frontend
 npm install
 $env:VITE_API_URL="http://127.0.0.1:8000"
 npm run dev
@@ -141,9 +231,9 @@ The backend supports a dataset override through `BESCOM_DATA_DIR`.
 In backend terminal 1:
 
 ```powershell
-cd C:\Users\Spandana\Documents\Codex\2026-05-05\files-mentioned-by-the-user-smart\smart_ai_meter\backend
+cd backend
 .venv\Scripts\Activate.ps1
-$env:BESCOM_DATA_DIR="C:\Users\Spandana\Documents\Codex\2026-05-05\files-mentioned-by-the-user-smart\smart_ai_meter\data\demo_edge_cases"
+$env:BESCOM_DATA_DIR="..\data\demo_edge_cases"
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -181,7 +271,6 @@ The existing frontend is not changed by this training workflow, but the Models p
 ## Run Locally With Docker
 
 ```bash
-cd C:\Users\Spandana\Documents\Codex\2026-05-05\files-mentioned-by-the-user-smart\smart_ai_meter
 docker compose up --build
 ```
 

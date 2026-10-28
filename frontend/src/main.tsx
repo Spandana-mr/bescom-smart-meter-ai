@@ -60,6 +60,9 @@ type AlertItem = {
   summary: string;
   nextAction: string;
   urgencyScore?: number;
+  transformerId?: string;
+  dtUnexplainedPct?: number;
+  combinedRiskScore?: number;
 };
 type Overview = {
   kpis: Record<string, number | string>;
@@ -576,6 +579,11 @@ function AlertsPage({ alerts, setAlerts, selectedAlert, setSelectedAlert, openMe
                   <small>{alert.zone} / {alert.type} / {alert.detectorsAgreeing || 1}/4 detectors</small>
                   <small>Status: {alert.status}</small>
                   <p>{alert.summary}</p>
+                  {alert.transformerId && (
+                    <small style={{ color: "#475467", marginTop: 4, display: "block" }}>
+                      Parent transformer {alert.transformerId}: unexplained loss {alert.dtUnexplainedPct !== undefined && alert.dtUnexplainedPct !== null ? `${alert.dtUnexplainedPct.toFixed(1)}%` : "N/A"} this period
+                    </small>
+                  )}
                 </button>
                 <div className="action-stack">
                   <strong>{money(alert.revenueImpact)}</strong>
@@ -614,6 +622,11 @@ function AlertDetailPanel({ detail, openMeter }: { detail: AlertDetail | null; o
         <div className="summary-callout">
           <strong>{detail.confidence.consensusLabel}</strong>
           <p>{detail.summary}</p>
+          {detail.transformerId && (
+            <p style={{ fontSize: 12, color: "#475467", marginTop: 6, marginBottom: 6 }}>
+              Parent transformer <strong>{detail.transformerId}</strong>: unexplained loss <strong>{detail.dtUnexplainedPct !== undefined && detail.dtUnexplainedPct !== null ? `${detail.dtUnexplainedPct.toFixed(2)}%` : "N/A"}</strong> this period (corroborating context to prioritize investigation).
+            </p>
+          )}
           <button onClick={() => openMeter(detail.meterId)}>Open meter deep dive</button>
         </div>
         <section>
